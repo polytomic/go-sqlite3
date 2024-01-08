@@ -355,8 +355,9 @@ const (
 
 // SQLiteDriver implements driver.Driver.
 type SQLiteDriver struct {
-	Extensions  []string
-	ConnectHook func(*SQLiteConn) error
+	Extensions       []string
+	VFSExtentensions []string
+	ConnectHook      func(*SQLiteConn) error
 }
 
 // SQLiteConn implements driver.Conn.
@@ -976,103 +977,113 @@ func (c *SQLiteConn) begin(ctx context.Context) (driver.Tx, error) {
 // The argument is may be either in parentheses or it may be separated from
 // the pragma name by an equal sign. The two syntaxes yield identical results.
 // In many pragmas, the argument is a boolean. The boolean can be one of:
-//    1 yes true on
-//    0 no false off
+//
+//	1 yes true on
+//	0 no false off
 //
 // You can specify a DSN string using a URI as the filename.
-//   test.db
-//   file:test.db?cache=shared&mode=memory
-//   :memory:
-//   file::memory:
 //
-//   mode
-//     Access mode of the database.
-//     https://www.sqlite.org/c3ref/open.html
-//     Values:
-//      - ro
-//      - rw
-//      - rwc
-//      - memory
+//	  test.db
+//	  file:test.db?cache=shared&mode=memory
+//	  :memory:
+//	  file::memory:
 //
-//   cache
-//     SQLite Shared-Cache Mode
-//     https://www.sqlite.org/sharedcache.html
-//     Values:
-//       - shared
-//       - private
+//	  mode
+//	    Access mode of the database.
+//	    https://www.sqlite.org/c3ref/open.html
+//	    Values:
+//	     - ro
+//	     - rw
+//	     - rwc
+//	     - memory
 //
-//   immutable=Boolean
-//     The immutable parameter is a boolean query parameter that indicates
-//     that the database file is stored on read-only media. When immutable is set,
-//     SQLite assumes that the database file cannot be changed,
-//     even by a process with higher privilege,
-//     and so the database is opened read-only and all locking and change detection is disabled.
-//     Caution: Setting the immutable property on a database file that
-//     does in fact change can result in incorrect query results and/or SQLITE_CORRUPT errors.
+//		mode
+//		  Access mode of the database.
+//		  https://www.sqlite.org/c3ref/open.html
+//		  Values:
+//		   - ro
+//		   - rw
+//		   - rwc
+//		   - memory
+//
+//		cache
+//		  SQLite Shared-Cache Mode
+//		  https://www.sqlite.org/sharedcache.html
+//		  Values:
+//		    - shared
+//		    - private
+//
+//		immutable=Boolean
+//		  The immutable parameter is a boolean query parameter that indicates
+//		  that the database file is stored on read-only media. When immutable is set,
+//		  SQLite assumes that the database file cannot be changed,
+//		  even by a process with higher privilege,
+//		  and so the database is opened read-only and all locking and change detection is disabled.
+//		  Caution: Setting the immutable property on a database file that
+//		  does in fact change can result in incorrect query results and/or SQLITE_CORRUPT errors.
 //
 // go-sqlite3 adds the following query parameters to those used by SQLite:
-//   _loc=XXX
-//     Specify location of time format. It's possible to specify "auto".
 //
-//   _mutex=XXX
-//     Specify mutex mode. XXX can be "no", "full".
+//	_loc=XXX
+//	  Specify location of time format. It's possible to specify "auto".
 //
-//   _txlock=XXX
-//     Specify locking behavior for transactions.  XXX can be "immediate",
-//     "deferred", "exclusive".
+//	_mutex=XXX
+//	  Specify mutex mode. XXX can be "no", "full".
 //
-//   _auto_vacuum=X | _vacuum=X
-//     0 | none - Auto Vacuum disabled
-//     1 | full - Auto Vacuum FULL
-//     2 | incremental - Auto Vacuum Incremental
+//	_txlock=XXX
+//	  Specify locking behavior for transactions.  XXX can be "immediate",
+//	  "deferred", "exclusive".
 //
-//   _busy_timeout=XXX"| _timeout=XXX
-//     Specify value for sqlite3_busy_timeout.
+//	_auto_vacuum=X | _vacuum=X
+//	  0 | none - Auto Vacuum disabled
+//	  1 | full - Auto Vacuum FULL
+//	  2 | incremental - Auto Vacuum Incremental
 //
-//   _case_sensitive_like=Boolean | _cslike=Boolean
-//     https://www.sqlite.org/pragma.html#pragma_case_sensitive_like
-//     Default or disabled the LIKE operation is case-insensitive.
-//     When enabling this options behaviour of LIKE will become case-sensitive.
+//	_busy_timeout=XXX"| _timeout=XXX
+//	  Specify value for sqlite3_busy_timeout.
 //
-//   _defer_foreign_keys=Boolean | _defer_fk=Boolean
-//     Defer Foreign Keys until outermost transaction is committed.
+//	_case_sensitive_like=Boolean | _cslike=Boolean
+//	  https://www.sqlite.org/pragma.html#pragma_case_sensitive_like
+//	  Default or disabled the LIKE operation is case-insensitive.
+//	  When enabling this options behaviour of LIKE will become case-sensitive.
 //
-//   _foreign_keys=Boolean | _fk=Boolean
-//     Enable or disable enforcement of foreign keys.
+//	_defer_foreign_keys=Boolean | _defer_fk=Boolean
+//	  Defer Foreign Keys until outermost transaction is committed.
 //
-//   _ignore_check_constraints=Boolean
-//     This pragma enables or disables the enforcement of CHECK constraints.
-//     The default setting is off, meaning that CHECK constraints are enforced by default.
+//	_foreign_keys=Boolean | _fk=Boolean
+//	  Enable or disable enforcement of foreign keys.
 //
-//   _journal_mode=MODE | _journal=MODE
-//     Set journal mode for the databases associated with the current connection.
-//     https://www.sqlite.org/pragma.html#pragma_journal_mode
+//	_ignore_check_constraints=Boolean
+//	  This pragma enables or disables the enforcement of CHECK constraints.
+//	  The default setting is off, meaning that CHECK constraints are enforced by default.
 //
-//   _locking_mode=X | _locking=X
-//     Sets the database connection locking-mode.
-//     The locking-mode is either NORMAL or EXCLUSIVE.
-//     https://www.sqlite.org/pragma.html#pragma_locking_mode
+//	_journal_mode=MODE | _journal=MODE
+//	  Set journal mode for the databases associated with the current connection.
+//	  https://www.sqlite.org/pragma.html#pragma_journal_mode
 //
-//   _query_only=Boolean
-//     The query_only pragma prevents all changes to database files when enabled.
+//	_locking_mode=X | _locking=X
+//	  Sets the database connection locking-mode.
+//	  The locking-mode is either NORMAL or EXCLUSIVE.
+//	  https://www.sqlite.org/pragma.html#pragma_locking_mode
 //
-//   _recursive_triggers=Boolean | _rt=Boolean
-//     Enable or disable recursive triggers.
+//	_query_only=Boolean
+//	  The query_only pragma prevents all changes to database files when enabled.
 //
-//   _secure_delete=Boolean|FAST
-//     When secure_delete is on, SQLite overwrites deleted content with zeros.
-//     https://www.sqlite.org/pragma.html#pragma_secure_delete
+//	_recursive_triggers=Boolean | _rt=Boolean
+//	  Enable or disable recursive triggers.
 //
-//   _synchronous=X | _sync=X
-//     Change the setting of the "synchronous" flag.
-//     https://www.sqlite.org/pragma.html#pragma_synchronous
+//	_secure_delete=Boolean|FAST
+//	  When secure_delete is on, SQLite overwrites deleted content with zeros.
+//	  https://www.sqlite.org/pragma.html#pragma_secure_delete
 //
-//   _writable_schema=Boolean
-//     When this pragma is on, the SQLITE_MASTER tables in which database
-//     can be changed using ordinary UPDATE, INSERT, and DELETE statements.
-//     Warning: misuse of this pragma can easily result in a corrupt database file.
+//	_synchronous=X | _sync=X
+//	  Change the setting of the "synchronous" flag.
+//	  https://www.sqlite.org/pragma.html#pragma_synchronous
 //
-//
+//	_writable_schema=Boolean
+//	  When this pragma is on, the SQLITE_MASTER tables in which database
+//	  can be changed using ordinary UPDATE, INSERT, and DELETE statements.
+//	  Warning: misuse of this pragma can easily result in a corrupt database file.
 func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 	if C.sqlite3_threadsafe() == 0 {
 		return nil, errors.New("sqlite library was not compiled for thread-safe operation")
@@ -1450,28 +1461,91 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 		}
 	}
 
+	// If VFSExtensions, we need to load the extensions before opening the database
+	// Open an in-memory database to load the extensions
+	// we'll attach the real database later
 	var db *C.sqlite3
-	name := C.CString(dsn)
-	defer C.free(unsafe.Pointer(name))
-	var vfs *C.char
-	if vfsName != "" {
-		vfs = C.CString(vfsName)
-		defer C.free(unsafe.Pointer(vfs))
-	}
-	rv := C._sqlite3_open_v2(name, &db,
-		mutex|C.SQLITE_OPEN_READWRITE|C.SQLITE_OPEN_CREATE,
-		vfs)
-	if rv != 0 {
-		// Save off the error _before_ closing the database.
-		// This is safe even if db is nil.
-		err := lastError(db)
-		if db != nil {
-			C.sqlite3_close_v2(db)
+	if len(d.VFSExtentensions) > 0 {
+		tempName := C.CString(":memory:")
+		name := C.CString(dsn)
+		defer C.free(unsafe.Pointer(name))
+		var vfs *C.char
+		rv := C._sqlite3_open_v2(tempName, &db,
+			mutex|C.SQLITE_OPEN_READWRITE|C.SQLITE_OPEN_CREATE,
+			vfs)
+		if rv != 0 {
+			// Save off the error _before_ closing the database.
+			// This is safe even if db is nil.
+			err := lastError(db)
+			if db != nil {
+				C.sqlite3_close_v2(db)
+			}
+			return nil, err
 		}
-		return nil, err
-	}
-	if db == nil {
-		return nil, errors.New("sqlite succeeded without returning a database")
+		if db == nil {
+			return nil, errors.New("sqlite succeeded without returning a database")
+		}
+
+		// Load the extensions
+		rv = C.sqlite3_enable_load_extension(db, 1)
+		if rv != C.SQLITE_OK {
+			return nil, errors.New(C.GoString(C.sqlite3_errmsg(db)))
+		}
+		for _, ext := range d.VFSExtentensions {
+			clib := C.CString(ext)
+			defer C.free(unsafe.Pointer(clib))
+
+			var centry *C.char
+			var errMsg *C.char
+			defer C.sqlite3_free(unsafe.Pointer(errMsg))
+
+			rv := C.sqlite3_load_extension(db, clib, centry, &errMsg)
+			if rv != C.SQLITE_OK {
+				return nil, errors.New(C.GoString(errMsg))
+			}
+		}
+
+		// Open the real database, this time with the VFS
+		C._sqlite3_open_v2(name, &db,
+			mutex|C.SQLITE_OPEN_READWRITE|C.SQLITE_OPEN_CREATE,
+			vfs)
+		if rv != 0 {
+			// Save off the error _before_ closing the database.
+			// This is safe even if db is nil.
+			err := lastError(db)
+			if db != nil {
+				C.sqlite3_close_v2(db)
+			}
+			return nil, err
+		}
+		if db == nil {
+			return nil, errors.New("sqlite succeeded without returning a database")
+		}
+
+	} else {
+		// No VFSExtensions here, just open the database
+		name := C.CString(dsn)
+		defer C.free(unsafe.Pointer(name))
+		var vfs *C.char
+		if vfsName != "" {
+			vfs = C.CString(vfsName)
+			defer C.free(unsafe.Pointer(vfs))
+		}
+		rv := C._sqlite3_open_v2(name, &db,
+			mutex|C.SQLITE_OPEN_READWRITE|C.SQLITE_OPEN_CREATE,
+			vfs)
+		if rv != 0 {
+			// Save off the error _before_ closing the database.
+			// This is safe even if db is nil.
+			err := lastError(db)
+			if db != nil {
+				C.sqlite3_close_v2(db)
+			}
+			return nil, err
+		}
+		if db == nil {
+			return nil, errors.New("sqlite succeeded without returning a database")
+		}
 	}
 
 	exec := func(s string) error {
